@@ -1,0 +1,886 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r message=FALSE, warning=FALSE}
+# 1. Loading of packages
+library(caret)
+library(psych)
+library(e1071)
+library(class)
+library(ROCR)
+library(pROC)
+library(plotly)
+library(ggplot2)
+library(Metrics)
+library(randomForest)
+library(adabag)
+library(rpart)
+```
+
+```{r}
+getwd()
+
+```
+
+```{r}
+# 2. Loading of data
+getwd()
+data = read.csv("C:/Users/SAI/Desktop/FINANCE-24/FA1.csv")
+head(data)
+```
+
+
+```{r}
+dim(data)
+```
+
+```{r}
+str(data)
+```
+
+```{r}
+summary(data)
+```
+
+```{r}
+# Changing Columns name
+cols <- c("Company_Name","Company_year","X1","X2","X3","X4","X5","X6","X7","X8","X9","X10","X11","BSE","Target","X12","X13")
+colnames(data) <- cols
+head(data)
+```
+
+
+```{r}
+# Converting the datatype for the columns
+#data[is.na(data)]=0
+
+data$X4 <- as.numeric(as.character(data$X4))
+#data[["X4"]][is.na(data[["X4"]])] <- 0
+
+data$X6 <- as.numeric(as.character(data$X6))
+#data[["X6"]][is.na(data[["X6"]])] <- 0
+
+data$X7 <- as.numeric(as.character(data$X7))
+#data[["X7"]][is.na(data[["X7"]])] <- 0
+
+
+data$X8 <- as.numeric(as.character(data$X8))
+#data[["X8"]][is.na(data[["X8"]])] <- 0
+
+
+data$X9 <- as.numeric(as.character(data$X9))
+#data[["X9"]][is.na(data[["X9"]])] <- 0
+
+
+data$X11 <- as.numeric(as.character(data$X11))
+#data[["X11"]][is.na(data[["X11"]])] <- 0
+
+data$Target <- as.factor(as.integer(data$Target))
+#str(data)
+#data[[data$Target]][is.na(data[["X4"]])]<- 0
+```
+
+```{r}
+data=na.omit(data) 
+dim(data)
+```
+
+
+```{r include=FALSE}
+
+# Creating Data Parttition
+indxTrain <- createDataPartition(y = data$Target, p=0.7, list=FALSE) 
+training <- data[indxTrain,] 
+testing <- data[-indxTrain,]
+str(training)
+```
+
+#LOGISTIC REGRESSION
+
+```{r message=FALSE, warning=FALSE}
+#logistic regression model
+library(e1071)
+model1 <- glm(Target ~ X1+X2+X3+X4+X5+X6+X7+X8+X9+X10+X11+X12+X13,
+                    data=training, family="binomial")
+summary(model1)
+```
+
+```{r}
+set.seed(101)
+# Predicting Probabilities out of Logistic Regression algorithm 
+prob_pred = predict(model1,type = 'response',newdata = training[-15])
+
+# Converting probabilies to binary class of 0 and 1 from predicted probablities
+y_pred = ifelse(prob_pred>0.5,1,0)
+#length(y_pred)
+#length(training$Target)
+
+# Creating table for creating Confusion Matrix:
+cm = table(training[,15],y_pred)
+
+print("Confusion Matrix for Logistic Regression before Cross-validation")
+c1 <- confusionMatrix(cm)
+c1
+```
+
+
+```{r}
+
+library("ROCR")    
+proc=prediction(prob_pred,training$Target)
+perf=performance(proc,"tpr","fpr")
+plot(perf,colorize=T,print.cutoffs.at=seq(0,1,0.1),print.auc = TRUE)
+
+```
+
+```{r}
+print("The AUC-score of Logistic Regression for Training dataset Before Cross-Validation ")
+AUC_LOG=auc(training$Target,prob_pred)
+AUC_LOG
+
+
+```
+
+```{r }
+set.seed(101)
+# Predicting Probabilities out of Logistic Regression algorithm 
+prob_pred1 = predict(model1,type = 'response',newdata = testing[-15])
+
+# Converting probabilies to binary class of 0 and 1 from predicted probablities
+y_pred1 = ifelse(prob_pred1>0.5,1,0)
+#length(y_pred1)
+#length(testing$Target)
+
+# Creating table for creating Confusion Matrix:
+cm1 = table(testing[,15],y_pred1)
+
+print("Confusion Matrix for Logistic Regression before Cross-validation")
+c2 <- confusionMatrix(cm1)
+c2
+```
+
+```{r}
+# ROC-Curve:
+prob_pred1 = predict(model1,type = 'response',newdata = testing[-15])
+proc1 =prediction(prob_pred1,testing$Target)
+perf1=performance(proc1,"tpr","fpr")
+plot(perf1,colorize=T,print.cutoffs.at=seq(0,1,0.1),print.auc = TRUE)
+
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of Logistic Regression for Testing dataset before Cross-validation ")
+AUC_LOG1=auc(testing$Target,prob_pred1)
+AUC_LOG1
+
+```
+
+**Fitting of Logistic Regression after k-cross validation:**
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+ctrl <- trainControl(method = "repeatedcv", number = 10, savePredictions = TRUE)
+
+model2 <- train(as.factor(Target) ~ X1+X2+X3+X4+X5+X6+X7+X8+X9+X10+X11+X12+X13,  
+                 data= training, method="glm", family="binomial",
+                 trControl = ctrl, tuneLength = 5)
+summary(model2)
+```
+
+```{r echo=FALSE}
+
+pred <- predict(model2, newdata=training)
+
+print("Confusion Matrix for Logistic Regression on Trainig data After Cross-validation")
+confusionMatrix(data=pred, training$Target)
+
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of Logistic Regression for Training dataset After Cross validation ")
+AUC_LOG2=auc(training$Target,pred)
+AUC_LOG2
+
+```
+
+
+```{r echo=FALSE}
+
+pred1 <- predict(model2, newdata=testing)
+
+print("Confusion Matrix for Logistic Regression on Testing data After Cross-validation")
+confusionMatrix(data=pred1, testing$Target)
+
+```
+
+
+```{r}
+# AUC-Score:
+print("The AUC-score of Logistic Regression for Testing dataset After Cross validation ")
+AUC_LOG3=auc(testing$Target,pred1)
+AUC_LOG3
+
+```
+
+```{r message=FALSE, warning=FALSE}
+plot(roc(predictor = as.integer(model2$pred$pred) , response = as.integer(model2$pred$obs)))
+```
+
+
+
+
+#SVM-LINEAR ALGORITHM
+
+```{r}
+# SVM-LINEAR
+library(e1071)
+library(caret)
+svm_model <- svm(Target ~ X1+X2+X3+X4+X5+X6+X7+X8+X9+X10+X11+X12+X13, data=training,kernel = "linear",probability = TRUE)
+summary(svm_model)
+```
+
+```{r}
+set.seed(101)
+# Predicting Probabilities out of Logistic Regression algorithm 
+svm_pred = predict(svm_model,newdata = training[-15],decision.values = TRUE, probability = TRUE)
+
+#length(y_pred)
+#length(training$Target)
+
+# Creating table for creating Confusion Matrix:
+cm2 = table(training[,15],svm_pred)
+
+print("Confusion Matrix for SVM-LINEAR before Cross-validation for Training Dataset")
+c3 <- confusionMatrix(cm2)
+c3
+```
+
+
+```{r}
+# AUC-Score:
+print("The AUC-score of SVM-LINEAR for Training dataset Before Cross validation ")
+AUC_SVM=auc(training$Target,svm_pred)
+AUC_SVM
+
+```
+
+```{r}
+set.seed(101)
+# Predicting Probabilities out of SVM algorithm 
+svm_pred1 = predict(svm_model,newdata = testing[-15],decision.values = TRUE, probability = TRUE)
+
+# Creating table for creating Confusion Matrix:
+cm3 = table(testing[,15],svm_pred1)
+
+print("Confusion Matrix for SVM-LINEAR before Cross-validation for Testing Dataset")
+c4 <- confusionMatrix(cm3)
+c4
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of SVM-LINEAR for Testing dataset Before Cross validation ")
+AUC_SVM1=auc(testing$Target,svm_pred1)
+AUC_SVM1
+
+```
+
+
+```{r}
+trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+svm_cross <- train(Target ~ X1+X2+X3+X4+X5+X6+X7+X8+X9+X10+X11+X12+X13, data = training, method = "svmLinear",
+trControl=trctrl,
+preProcess = c("center", "scale"),
+tuneLength = 10)
+
+svm_cross
+```
+
+```{r}
+svm_cross_pred <- predict(svm_cross, newdata = training)
+
+# Confusion Matrix After k-cross validation
+print("Confusion Matrix for SVM-LINEAR after Cross-validation for Training data")
+confusionMatrix(table(svm_cross_pred, training$Target))
+
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of SVM-LINEAR for Training dataset After Cross validation ")
+AUC_SVM_cross=auc(training$Target,svm_cross_pred)
+AUC_SVM_cross
+
+```
+
+```{r}
+svm_cross_pred1 <- predict(svm_cross, newdata = testing)
+
+# Confusion Matrix After k-cross validation
+print("Confusion Matrix for SVM-LINEAR after Cross-validation for Testing data")
+confusionMatrix(table(svm_cross_pred1, testing$Target))
+
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of SVM-LINEAR for Testing dataset After Cross validation ")
+AUC_SVM_cross1=auc(testing$Target,svm_cross_pred1)
+AUC_SVM_cross1
+
+```
+
+
+
+#SVM- RADIAL
+```{r}
+
+#training[is.na(training)] = 0
+#testing[is.na(testing)]=0
+library(e1071)
+svm_model1 <- svm(Target ~ X1+X2+X3+X4+X5+X6+X7+X8+X9+X10+X11+X12+X13, data=training,kernel = "radial",na.action = na.omit)
+summary(svm_model1)
+```
+
+
+```{r}
+# Predicting on training data
+svm_pred2 = predict(svm_model1,newdata = training[-15])
+
+print("Confusion Matrix for SVM- RADIAL before Cross-validation on Training data")
+c5 <- confusionMatrix(training$Target,svm_pred2)
+c5
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of SVM-Radial for Training dataset Before Cross validation ")
+AUC_SVM2=auc(training$Target,svm_pred2)
+AUC_SVM2
+
+```
+
+
+```{r}
+# Predicting on test data
+svm_pred3 = predict(svm_model1,newdata = testing[-15],)
+
+print("Confusion Matrix for SVM-RADIAL for Testing dataset before Cross-validation")
+c6 <- confusionMatrix(testing$Target,svm_pred3)
+c6
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of SVM- RADIAL for Testing dataset Before Cross validation ")
+AUC_SVM3=auc(testing$Target,svm_pred3)
+AUC_SVM3
+
+```
+
+```{r}
+trctrl1 <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+svm_cross1 <- train(Target ~ X1+X2+X3+X4+X5+X6+X7+X8+X9+X10+X11+X12+X13, data = training, method = "svmRadial",
+trControl=trctrl,
+preProcess = c("center", "scale"),
+tuneLength = 10)
+
+svm_cross1
+```
+
+```{r}
+svm_cross_pred2 <- predict(svm_cross1, newdata = training)
+
+# Confusion Matrix After k-cross validation
+print("Confusion Matrix for SVM-Radial After Cross-validation for Training data")
+confusionMatrix(table(svm_cross_pred2, training$Target))
+
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of SVM- RADIAL for Training dataset After Cross validation ")
+AUC_SVM_cross3=auc(training$Target,svm_cross_pred2)
+AUC_SVM_cross3
+
+```
+
+```{r}
+svm_cross_pred4 <- predict(svm_cross1, newdata = testing)
+
+# Confusion Matrix After k-cross validation
+print("Confusion Matrix for SVM-Radial After Cross-validation for Testing data")
+confusionMatrix(table(svm_cross_pred4, testing$Target))
+
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of SVM- RADIAL for Testing dataset After Cross validation ")
+AUC_SVM_cross4=auc(testing$Target,svm_cross_pred4)
+AUC_SVM_cross4
+
+```
+
+
+
+
+
+
+# RANDOM FOREST BEFORE CROSS-VALIDATION
+
+```{r}
+
+randomf=randomForest(Target ~ X1+X2+X3+X4+X5+X6+X7+X8+X9+X10+X11+X12+X13 , data =training)
+randomf
+```
+
+```{r}
+predrf = predict( randomf ,newdata = training[-15])
+
+print("Confusion Matrix for Random FOrest Before Cross-validation for Training data")
+c7 <- confusionMatrix(training$Target,predrf)
+c7
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of Random Forest for Training dataset Before Cross validation ")
+AUC_rf=auc(training$Target,predrf)
+AUC_rf
+
+```
+
+```{r}
+
+predrf1 = predict( randomf ,newdata = testing[-15])
+print("Confusion Matrix for Random FOrest Before Cross-validation for Testing data")
+c8 <- confusionMatrix(testing$Target,predrf1)
+c8
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of Random Forest for Testing dataset Before Cross validation ")
+AUC_rf1=auc(testing$Target,predrf1)
+AUC_rf1
+
+```
+
+
+
+
+
+# RANDOM FOREST AFTER CROSS-VALIDATION
+
+```{r}
+# Set a random seed
+set.seed(51)
+# Training algorithm
+rf_cross <- train(Target ~ X1+X2+X3+X4+X5+X6+X7+X8+X9+X10+X11+X12+X13 , data = training,
+               method = 'rf',trControl=trainControl("repeatedcv", number = 10))
+rf_cross
+```
+
+```{r}
+predrf_cross = predict( rf_cross ,newdata = training[-15])
+
+print("Confusion Matrix for Random Forest After Cross-validation for Training data")
+c9 <- confusionMatrix(training$Target,predrf_cross)
+c9
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of Random Forest for Training dataset After Cross validation ")
+AUC_rf2= auc(training$Target,predrf_cross)
+AUC_rf2
+
+```
+
+```{r}
+
+predrf_cross1 = predict( rf_cross ,newdata = testing[-15])
+print("Confusion Matrix for Random Forest After Cross-validation for Testing data")
+c10 <- confusionMatrix(testing$Target,predrf_cross1)
+c10
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of Random Forest for Testing dataset After Cross validation ")
+AUC_rf3=auc(testing$Target,predrf_cross1)
+AUC_rf3
+
+```
+
+
+
+
+
+# BAGGING BEFORE CROSS-VALIDATION
+
+```{r}
+library(ipred)
+bag <- bagging(Target~X1+X2+X3+X4+X5+X6+X7+X8+X9+X10+X11+X12+X13, data = training,nbagg = 100,coob = TRUE,
+               control = rpart.control(minsplit = 2, cp = 0))
+bag
+```
+
+```{r}
+pred_bag=predict(bag,training[-15])
+print("Confusion Matrix for Bagging Before Cross-validation for TRAINING data")
+c11=confusionMatrix(pred_bag,training$Target)
+c11
+```
+
+
+```{r}
+# AUC-Score:
+print("The AUC-score of Bagging for Training dataset Before Cross validation ")
+AUC_bag=auc(training$Target,pred_bag)
+AUC_bag
+
+```
+
+```{r}
+pred_bag1 = predict( bag ,newdata = testing[-15])
+print("Confusion Matrix for Bagging Before Cross-validation for Testing data")
+c12 <- confusionMatrix(testing$Target,pred_bag1)
+c12
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of Bagging for Testing dataset Before Cross validation ")
+AUC_bag1=auc(testing$Target,pred_bag1)
+AUC_bag1
+
+```
+
+
+
+
+
+# BAGGING AFTER CROSS-VALIDATION
+
+```{r}
+# Set a random seed
+set.seed(51)
+# Training algorithm
+bag_cross <- train(Target ~ X1+X2+X3+X4+X5+X6+X7+X8+X9+X10+X11+X12+X13 , data = training,
+               method = "treebag",trControl = trainControl(method = "repeatedcv", number = 10),nbagg = 200,  
+               control = rpart.control(minsplit = 2, cp = 0))
+
+```
+
+```{r}
+pred_bag_cross = predict( bag_cross,newdata = training[-15])
+
+print("Confusion Matrix for Bagging After Cross-validation for Training data")
+c13 <- confusionMatrix(training$Target,pred_bag_cross )
+c13
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of Bagging for Training dataset After Cross validation ")
+AUC_bag2= auc(training$Target,pred_bag_cross)
+AUC_bag2
+
+```
+
+```{r}
+
+pred_bag_cross1 = predict(bag_cross ,newdata = testing[-15])
+print("Confusion Matrix for Bagging After Cross-validation for Testing data")
+c14 <- confusionMatrix(testing$Target,pred_bag_cross1)
+c14
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of Bagging for Testing dataset After Cross validation ")
+AUC_bag3=auc(testing$Target,pred_bag_cross1)
+AUC_bag3
+
+```
+
+
+
+
+
+
+# BOOSTING BEFORE CROSS-VALIDATION
+
+```{r}
+library(adabag)
+m = boosting(Target~ X1+X2+X3+X4+X5+X6+X7+X8+X9+X10+X11+X12+X13, data = training,boos=TRUE, mfinal=50)
+```
+
+
+```{r}
+pred_boost = predict(m,newdata = training[-15],type="response")
+
+print("Confusion Matrix for Boosting Before Cross-validation for Training data")
+c15 <- confusionMatrix(as.factor(training$Target),as.factor(pred_boost$class))
+c15
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of Boosting for Traing dataset before Cross validation ")
+AUC_boost =auc(training$Target,pred_boost$class)
+AUC_boost
+
+```
+
+```{r}
+pred_boost1 = predict( m ,newdata = testing[-15])
+print("Confusion Matrix for Bagging Before Cross-validation for Testing data")
+c16 <- confusionMatrix(as.factor(testing$Target),as.factor(pred_boost1$class))
+c16
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of Boosting for Testing dataset Before Cross validation ")
+AUC_boost1 = auc(testing$Target,pred_boost1$class)
+AUC_boost1
+
+```
+
+
+
+
+
+# BOOSTING AFTER CROSS-VALIDATION
+
+```{r}
+# Set a random seed
+set.seed(51)
+
+# Training algorithm
+m1 = boosting(Target~ X1+X2+X3+X4+X5+X6+X7+X8+X9+X10+X11+X12+X13, data = training,boos=TRUE, mfinal=50,v=10)
+```
+
+```{r}
+pred_boost_cross = predict( m1,newdata = training[-15],type="response")
+
+print("Confusion Matrix for Boosting After Cross-validation for Training data")
+c17 <- confusionMatrix(as.factor(training$Target),as.factor(pred_boost_cross$class))
+c17
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of Boosting for Training dataset After Cross validation ")
+AUC_boost2 = auc(training$Target,pred_boost_cross$class)
+AUC_boost2
+
+```
+
+```{r}
+pred_boost_cross1 = predict( m1,newdata = testing[-15])
+
+print("Confusion Matrix for Boosting After Cross-validation for Testing data")
+c18 <- confusionMatrix(as.factor(testing$Target),as.factor(pred_boost_cross1$class) )
+c18
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of Bagging for Training dataset After Cross validation ")
+AUC_boost3 = auc(testing$Target,pred_boost_cross1$class)
+AUC_boost3
+
+```
+
+
+
+
+
+
+
+
+# NEURAL NETWORK BEFORE CROSS-VALIDATION
+
+```{r}
+library(nnet)
+
+#Build the model
+model<-nnet(Target~ X1+X2+X3+X4+X5+X6+X7+X8+X9+X10+X11+X12+X13, data = training,size = 4,decay = 0.0001,maxit = 500)
+
+```
+
+
+
+```{r}
+summary(model$residuals)
+```
+
+
+```{r}
+p = predict(model,newdata = training[-15],type="class")
+
+print("Confusion Matrix for Neural Network before Cross-validation for Training data")
+c19 <- confusionMatrix(as.factor(training$Target),as.factor(p) )
+c19
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of Neural Network for Training dataset After Cross validation ")
+AUC_nn = auc(training$Target,p)
+AUC_nn
+
+```
+
+```{r}
+p1 = predict(model,newdata = testing[-15],type="class")
+
+print("Confusion Matrix for Neural Network before Cross-validation for Training data")
+c20 <- confusionMatrix(as.factor(testing$Target),as.factor(p1) )
+c20
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of Neural Network for Testing dataset After Cross validation ")
+AUC_nn1 = auc(testing$Target,p1)
+AUC_nn1
+
+```
+
+
+# NEURAL NETWORK AFTER CROSS-VALIDATION
+
+```{r}
+library(nnet)
+
+#Build the model
+model_cross <- train(Target ~ X1+X2+X3+X4+X5+X6+X7+X8+X9+X10+X11+X12+X13 , data = training,
+               method = "nnet",trControl=trainControl("repeatedcv", number = 10))
+```
+
+```{r}
+p2 = predict(model_cross,newdata = training[-15])
+
+print("Confusion Matrix for Neural Network After Cross-validation for Training data")
+c21 <- confusionMatrix(as.factor(training$Target),as.factor(p2) )
+c21
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of Neural Network for Training dataset After Cross validation ")
+AUC_nn2= auc(training$Target,p2)
+AUC_nn2
+
+```
+
+```{r}
+
+model_cross1 = predict(model_cross ,newdata = testing[-15])
+print("Confusion Matrix for ANN After Cross-validation for Testing data")
+c22 <- confusionMatrix(testing$Target,model_cross1)
+c22
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of Neural Network for Testing dataset After Cross validation ")
+AUC_nn2= auc(testing$Target,model_cross1)
+AUC_nn2
+```
+
+
+
+# MDA BEFORE CROSS-VALIDATION:
+
+```{r}
+#install.packages("mda")
+library(mda)
+library(MASS)
+
+
+mda_model= mda(Target~X1+X2+X3+X4+X5+X6+X7+X8+X9+X10+X11+X12+X13, data = training )
+mda_model
+```
+
+```{r}
+mda_predict1 <-predict(mda_model, training[-15])
+print("Confusion Matrix for MDA After Before cross-validation for Training data")
+cm6_1=confusionMatrix(mda_predict1,training$Target)
+cm6_1
+
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of MDA for Training dataset before Cross validation ")
+AUC_mda= auc(training$Target,mda_predict1)
+AUC_mda
+```
+
+
+```{r}
+mda_predict2 <-predict(mda_model, testing[-15])
+cm6=confusionMatrix(mda_predict2,testing$Target)
+cm6
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of MDA for Testing dataset before Cross validation ")
+AUC_mda1 = auc(testing$Target,mda_predict2)
+AUC_mda1
+```
+
+
+# MDA AFTER CROSS-VALIDATION:
+
+```{r}
+#Build the model
+mda_cross <- train(Target ~ X1+X2+X3+X4+X5+X6+X7+X8+X9+X10+X11+X12+X13 , data = training,
+               method = "mda",trControl=trainControl("repeatedcv", number = 10))
+
+mda_cross 
+```
+
+```{r}
+mda_cross1 = predict(mda_cross,newdata = training[-15])
+
+print("Confusion Matrix for MDA After Cross-validation for Training data")
+c23 <- confusionMatrix(training$Target,mda_cross1)
+c23
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of MDA for Training dataset after Cross validation ")
+AUC_mda2 = auc(training$Target,mda_cross1)
+AUC_mda2
+```
+
+
+```{r}
+mda_cross2 = predict(mda_cross,newdata = testing[-15])
+
+print("Confusion Matrix for MDA After Cross-validation for Testing data")
+c24 <- confusionMatrix(testing$Target,mda_cross2)
+c24
+```
+
+```{r}
+# AUC-Score:
+print("The AUC-score of MDA for Testing dataset after Cross validation ")
+AUC_mda3 = auc(testing$Target,mda_cross2)
+AUC_mda3
+```
